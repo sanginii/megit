@@ -1,0 +1,13 @@
+# Ignore Python bytecode auto generated
+__pycache__/
+*.py[cod]
+
+# Ignore virtual environment folder
+venv/
+
+.megit/
+
+# Ignore packaging metadata
+*.egg-info/
+
+WhileMaking.txt 
