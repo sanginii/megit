@@ -28,27 +28,44 @@ def get_object(oid, expected='blob'): #gives the file contents by passing its oi
     
 RefValue = namedtuple('RefValue', ['symbolic', 'value'])
     
-def update_ref(ref,value):#whatever oid is passed is made a head that is a file is created with HEAD name in which oid is written
-    assert not value.symbolic
+#Updates or creates a reference file with the given OID (or symbolic value).
+def update_ref (ref, value, deref=True): #ref:name value:named tuple
+    ref = _get_ref_internal(ref, deref)[0] #eturns (ref_path, RefValue) — we only want ref_path.
+    assert value.value
+    if value.symbolic:
+        value = f'ref: {value.value}'
+    else:
+        value = value.value
+
     ref_path = f'{GIT_DIR}/{ref}'
     os.makedirs (os.path.dirname(ref_path), exist_ok = True)
     with open (ref_path, 'w') as f:
-        f.write (value.value) 
+        f.write (value) 
 
-def get_ref(ref): #returns the oid to the reference name passed
+def get_ref (ref, deref=True):  #returns the oid to the reference name passed
+    return _get_ref_internal (ref, deref)[1] #value
+
+#Returns the actual reference path and a RefValue namedtuple
+def _get_ref_internal (ref,deref):
     ref_path = f'{GIT_DIR}/{ref}'
     value = None
     if os.path.isfile(ref_path):
         with open (ref_path) as f:
             value =  f.read().strip() #either oid or symbolic ref which points to another ref: refs/heads/main
-    if value and value.startswith ('ref:'):
-        return get_ref (value.split (':', 1)[1].strip ())
-    return RefValue (symbolic=False, value=value)
+    symbolic = bool (value) and value.startswith ('ref:')
+    if symbolic:
+        value = value.split (':', 1)[1].strip ()
+        if deref:
+            return _get_ref_internal (value, deref=True)
+    return ref, RefValue (symbolic=symbolic, value=value)
         
-def iter_refs(): #iterates through the ref and gives the full path and oid to the reference
+#Iterates over all refs in the repository, yielding each one with its value.
+def iter_refs (prefix='', deref=True): 
     refs = ['HEAD']
     for root, _, filenames in os.walk(f'{GIT_DIR}/refs/'):
         root = os.path.relpath(root, GIT_DIR) #os.path.relpath('/a/b/c/d', '/a/b')  →  'c/d'
         refs.extend(f'{root}/{name}' for name in filenames)
     for refname in refs:
-        yield refname, get_ref(refname)
+        if not refname.startswith(prefix):#skip all refs which not match the prefix(filter)
+            continue
+        yield refname, get_ref (refname, deref=deref) 
