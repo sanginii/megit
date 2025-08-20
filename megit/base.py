@@ -1,4 +1,5 @@
 from . import data
+from . import diff
 import os
 from collections import deque,namedtuple
 import itertools #iterating
@@ -184,3 +185,33 @@ def get_branch_name():
 def iter_branch_names():
     for refname,_ in data.iter_refs('refs/heads/'):
         yield os.path.relpath(refname, 'refs/heads/') 
+
+def reset (oid):
+    data.update_ref ('HEAD', data.RefValue (symbolic=False, value=oid))
+
+def get_working_tree ():
+    result = {}
+    for root, _, filenames in os.walk ('.'):
+        for filename in filenames:
+            path = os.path.relpath (f'{root}/{filename}')
+            if is_ignored (path) or not os.path.isfile (path):
+                continue
+            with open (path, 'rb') as f:
+                result[path] = data.hash_object (f.read ())
+    return result
+
+def merge (other):
+    HEAD = data.get_ref ('HEAD').value
+    assert HEAD
+    c_HEAD = get_commit (HEAD)
+    c_other = get_commit (other)
+
+    read_tree_merged (c_HEAD.tree, c_other.tree)
+    print ('Merged in working tree')
+
+def read_tree_merged (t_HEAD, t_other):
+    _empty_current_directory ()
+    for path, blob in diff.merge_trees (get_tree (t_HEAD), get_tree (t_other)).items ():
+        os.makedirs (f'./{os.path.dirname (path)}', exist_ok=True)
+        with open (path, 'wb') as f:
+            f.write (blob) 
